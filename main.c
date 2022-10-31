@@ -2,31 +2,27 @@
 #include <conio.h>
 #include <string.h>
 
-#define DATA_FILE 'text.csv'
-
-
 int main(void) {
     FILE *fp;
-    enum header{time, water};
+    typedef struct {
+        char time[21];
+        int water;
+    } measurement;
 
+    fp = fopen("data.csv","r");
+    if(!fp) {
+        perror("Cannot open file");
+        return 1;
+    } // Kontrollerer, at filen kan åbnes
+    measurement measurements[100]; //Laver en array af enkelte målinger (lige nu plads til 100 målinger)
+    int line = 0; // variabel til at tælle linjetallet
+    do {
+        fscanf(fp, "%20[^,],%d", measurements[line].time, &measurements[line].water);
+        printf("%d\n", measurements[line].time);
+        printf("%d", measurements[line].water);
+        line++;
+    } while (!feof(fp));
 
-    fp = fopen("text.csv","r");
-    if(!fp) {printf("Cannot open file");} // Kontrollerer, at filen kan åbnes
-    else {
-        char buffer[1024];
-        int row = 0;
-        int column = 0;
-        while (fgets(buffer, 1024, fp)) {
-            column = 0;
-            row++;
-            char* value = strtok(buffer, ",");
-            while (value) {
-                //do something for every value in row
-                printf("%c", value);
-                column++;
-            }
-        }
-    }
-
+    fclose(fp);
     return 0;
 }
