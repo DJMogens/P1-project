@@ -18,7 +18,7 @@ int main(void) {
     int line = 0; // variabel til at tælle linjetallet
     do {
         fscanf(fp, "%20[^,],%d", measurements[line].time, &measurements[line].water);
-        printf("%d\n", measurements[line].time);
+        printf("%s\n", measurements[line].time);
         printf("%d", measurements[line].water);
         line++;
     } while (!feof(fp));
