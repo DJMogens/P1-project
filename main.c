@@ -8,31 +8,65 @@ typedef struct {
     int water;
 } measurement;
 
-int calc_hour(measurement measurements[], int length);
+
+int get_length(FILE* fp);
+int get_data(FILE* fp, measurement measurements[], int length);
+void calc_consumption(measurement measurements[], int length);
+int water_per(measurement measurements[], int length, int time);
+
 
 int main(void) {
     FILE *fp;
-    measurement measurements[100];
-    fp = fopen("data.csv","r");
+    int length;
+    fp = fopen("data.csv", "r");
+    // Kontrollerer, at filen kan åbnes:
     if(!fp) {
         perror("Cannot open file");
         return 1;
-    } // Kontrollerer, at filen kan åbnes
-    int line = 0; // variabel til at tælle linjetallet
-    do {
-        fscanf(fp, "%ld,%d", &measurements[line].time_unix, &measurements[line].water);
-        printf("%ld\n", measurements[line].time_unix);
-        printf("%d\n", measurements[line].water);
-        line++;
-    } while (!feof(fp));
-    int hour = calc_hour(measurements, line);
+    } 
+    length = get_length(fp); // Finder linjeantal i fil
+    measurement measurements[length]; // Laver en array til målinger 
+    get_data(fp, measurements, length);
+    calc_consumption(measurements, length);
 
-    printf("difference last hour is %d", hour);
     fclose(fp);
     return 0;
 }
 
-int calc_hour(measurement measurements[], int length) {
+int get_length(FILE* fp) { //Funktion til at tælle antallet af datasæt
+    int sz;
+    int length;
+    fseek(fp, 0L, SEEK_END);
+    sz = ftell(fp);
+    rewind(fp);
+    length = (sz + 2)/21; //OBS: skal rettes, hvis dataen fylder mere/mindre per linje
+    printf("length of file is %d\n", length);
+    return length;
+}
+
+int get_data(FILE* fp, measurement measurements[], int length) { //Funktion til at indlæse data fra fil
+    int line = 0; // variabel til at tælle linjetallet
+    do {
+        fscanf(fp, "%ld,%d", &measurements[line].time_unix, &measurements[line].water);
+        printf("%ld  ", measurements[line].time_unix);
+        printf("%d\n", measurements[line].water);
+        line++;
+    } while (!feof(fp));
+}
+
+void calc_consumption(measurement measurements[], int length) {
+    int hour,
+        day,
+        week,
+        four_weeks;
+    hour = water_per(measurements, length, 3600);
+    day = water_per(measurements, length, 86400);
+    week = water_per(measurements, length, 604800);
+    four_weeks = water_per(measurements, length, 2419200);
+
+}
+
+int water_per(measurement measurements[], int length, int time) { // Funktion til at beregne forbrug sidste time
     double ave;
     int i,
         current_water,
@@ -40,11 +74,16 @@ int calc_hour(measurement measurements[], int length) {
         diff;
     long current_time,
          start_time;
+    // Finder sidst målte værdi:
     current_water = measurements[length - 1].water;
     current_time = measurements[length - 1].time_unix;
-    start_time = current_time - 3600;
+    printf("last is %ld %d\n", current_time, current_water);
+    // Finder først målte værdi:
+    start_time = current_time - time;
     for(i = length - 1; i >= 0 && measurements[i - 1].time_unix >= start_time; i--);
-    start_water = measurements[i + 1].water;
+    start_water = measurements[i].water;
+    printf("first is %ld %d\n", start_time, start_water);
+    // Beregner forskel:
     diff = current_water - start_water;
 
     return diff;
