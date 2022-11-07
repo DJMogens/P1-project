@@ -63,7 +63,10 @@ void calc_consumption(measurement measurements[], int length) {
     day = water_per(measurements, length, 86400);
     week = water_per(measurements, length, 604800);
     four_weeks = water_per(measurements, length, 2419200);
-
+    printf("last hour consumption was %d litres\n", hour);
+    printf("last day consumption was %d litres\n", day);
+    printf("last week consumption was %d litres\n", week);
+    printf("last four weeks consumption was %d litres\n", four_weeks);
 }
 
 int water_per(measurement measurements[], int length, int time) { // Funktion til at beregne forbrug sidste time
@@ -77,12 +80,10 @@ int water_per(measurement measurements[], int length, int time) { // Funktion ti
     // Finder sidst målte værdi:
     current_water = measurements[length - 1].water;
     current_time = measurements[length - 1].time_unix;
-    printf("last is %ld %d\n", current_time, current_water);
     // Finder først målte værdi:
     start_time = current_time - time;
     for(i = length - 1; i >= 0 && measurements[i - 1].time_unix >= start_time; i--);
     start_water = measurements[i].water;
-    printf("first is %ld %d\n", start_time, start_water);
     // Beregner forskel:
     diff = current_water - start_water;
 
