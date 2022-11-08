@@ -13,12 +13,13 @@ int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
 void calc_consumption(measurement measurements[], int length);
 int water_per(measurement measurements[], int length, int time);
-
+int time_since_zero(measurement measurements[], int length);
+void print_alarm(int time);
 
 int main(void) {
     FILE *fp;
     int length;
-    fp = fopen("data.csv", "r");
+    fp = fopen("newdata.csv", "r");
     // Kontrollerer, at filen kan åbnes:
     if(!fp) {
         perror("Cannot open file");
@@ -28,7 +29,7 @@ int main(void) {
     measurement measurements[length]; // Laver en array til målinger 
     get_data(fp, measurements, length);
     calc_consumption(measurements, length);
-
+    time_since_zero(measurements, length);
     fclose(fp);
     return 0;
 }
@@ -48,8 +49,6 @@ int get_data(FILE* fp, measurement measurements[], int length) { //Funktion til 
     int line = 0; // variabel til at tælle linjetallet
     do {
         fscanf(fp, "%ld,%d", &measurements[line].time_unix, &measurements[line].water);
-        printf("%ld  ", measurements[line].time_unix);
-        printf("%d\n", measurements[line].water);
         line++;
     } while (!feof(fp));
 }
@@ -86,6 +85,50 @@ int water_per(measurement measurements[], int length, int time) { // Funktion ti
     start_water = measurements[i].water;
     // Beregner forskel:
     diff = current_water - start_water;
-
     return diff;
+}
+
+int time_since_zero(measurement measurements[], int length) {
+    int time = 0;
+    for(int i = length - 1; i >= 0; i--) {
+        if(measurements[i].water == measurements[i - 1].water) {
+            printf("%d\n", i);
+            time = measurements[length - 1].time_unix - measurements[i].time_unix;
+            if(time == 0) {
+                time = 1;
+            }
+            break;
+        }
+    }
+    print_alarm(time);
+}
+
+void print_alarm(int time) {
+    int weeks = time / 604800,
+        days = (time % 604800) / 86400,
+        hours = (time % 86400) / 3600,
+        minutes = (time % 3600) / 60,
+        seconds = (time % 60);
+    if(time > 0) {
+        printf("It has been ");
+        if(weeks > 0) {
+            printf("%d weeks,", weeks);
+        }
+        if(days > 0) {
+            printf("%d days, ", days);
+        }
+        if(hours > 0) {
+            printf("%d hours, ", hours);
+        }
+        if(minutes > 0) {
+            printf("%d minutes, ", minutes);
+        }
+        if(seconds > 0) {
+            printf("%d seconds ", seconds);
+        }
+        printf("since the last time there was no change between measurements.");
+    }
+    else {
+        printf("There was no null value of change found in the data.");
+    }
 }
