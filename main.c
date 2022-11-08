@@ -8,7 +8,7 @@ typedef struct {
     int water;
 } measurement;
 
-
+void read_config(int* alarm_time);
 int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
 void calc_consumption(measurement measurements[], int length);
@@ -17,7 +17,10 @@ int time_since_zero(measurement measurements[], int length);
 void print_alarm(int time);
 
 int main(void) {
-    FILE *fp;
+    //Reading configuration
+    int alarm_time;
+    read_config(&alarm_time);
+    FILE* fp;
     int length;
     fp = fopen("newdata.csv", "r");
     // Kontrollerer, at filen kan åbnes:
@@ -32,6 +35,26 @@ int main(void) {
     time_since_zero(measurements, length);
     fclose(fp);
     return 0;
+}
+
+void read_config(int* alarm_time) {
+    FILE* cp;
+    cp = fopen("config", "r");
+    int num,
+        factor;
+    char unit;
+    fscanf(cp, "alarm_time = %d %c", &num, &unit);
+    if(unit == 'w') {
+        factor = 604800;
+    }
+    if(unit == 'd') {
+        factor = 86400;
+    }
+    if(unit == 'h') {
+        factor = 3600;
+    }
+    *alarm_time = num * factor;
+    fclose(cp);
 }
 
 int get_length(FILE* fp) { //Funktion til at tælle antallet af datasæt
