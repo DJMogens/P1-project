@@ -39,7 +39,7 @@ int main(void) {
 
 void read_config(int* alarm_time) {
     FILE* cp;
-    cp = fopen("config", "r");
+    cp = fopen("settings.conf", "r");
     int num,
         factor;
     char unit;
