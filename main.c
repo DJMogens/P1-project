@@ -1,20 +1,22 @@
 #include <stdio.h>
-#include <conio.h>
-#include <string.h>
+#include <time.h>
+
+#define DATA_FILE "newdata.csv"
+#define CONFIG_FILE "settings.conf"
 
 typedef struct {
-    char time_utc[26];
     long time_unix;
     int water;
 } measurement;
 
-void read_config(int* alarm_time);
+int read_config(int* alarm_time);
 int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
 void calc_consumption(measurement measurements[], int length);
 int water_per(measurement measurements[], int length, int time);
 int time_since_zero(measurement measurements[], int length);
 void print_alarm(int time);
+int format_time(long time_unix, char time_UTC[]);
 
 int main(void) {
     //Reading configuration
@@ -22,7 +24,7 @@ int main(void) {
     read_config(&alarm_time);
     FILE* fp;
     int length;
-    fp = fopen("newdata.csv", "r");
+    fp = fopen(DATA_FILE, "r");
     // Kontrollerer, at filen kan åbnes:
     if(!fp) {
         perror("Cannot open file");
@@ -37,9 +39,14 @@ int main(void) {
     return 0;
 }
 
-void read_config(int* alarm_time) {
+int read_config(int* alarm_time) {
     FILE* cp;
-    cp = fopen("settings.conf", "r");
+    int input = 1;
+    cp = fopen(CONFIG_FILE, "r");
+    if(!cp) {
+        perror("Couldn't open config file.");
+        return 1;
+    }
     int num,
         factor;
     char unit;
@@ -47,14 +54,19 @@ void read_config(int* alarm_time) {
     if(unit == 'w') {
         factor = 604800;
     }
-    if(unit == 'd') {
+    else if(unit == 'd') {
         factor = 86400;
     }
-    if(unit == 'h') {
+    else if(unit == 'h') {
         factor = 3600;
+    }
+    else {
+        perror("Error with input. See file: settings.conf");
+        return 1;
     }
     *alarm_time = num * factor;
     fclose(cp);
+    return 0;
 }
 
 int get_length(FILE* fp) { //Funktion til at tælle antallet af datasæt
@@ -89,6 +101,9 @@ void calc_consumption(measurement measurements[], int length) {
     printf("last day consumption was %d litres\n", day);
     printf("last week consumption was %d litres\n", week);
     printf("last four weeks consumption was %d litres\n", four_weeks);
+    char time_UTC[26];
+    format_time(measurements[length - 1].time_unix, time_UTC);
+    printf("last measurement was %s\n", time_UTC);
 }
 
 int water_per(measurement measurements[], int length, int time) { // Funktion til at beregne forbrug sidste time
@@ -147,11 +162,19 @@ void print_alarm(int time) {
             printf("%d minutes, ", minutes);
         }
         if(seconds > 0) {
-            printf("%d seconds ", seconds);
+            printf("%d seconds, ", seconds);
         }
         printf("since the last time there was no change between measurements.");
     }
     else {
         printf("There was no null value of change found in the data.");
     }
+}
+
+int format_time(long time_unix, char time_UTC[]) {
+    struct tm time_struct;
+    time_t rawtime = time_unix;
+    time_struct = *localtime(&rawtime);
+    strftime(time_UTC, 26, "%a %Y-%m-%d %H:%M:%S", &time_struct);
+    return 0;
 }
