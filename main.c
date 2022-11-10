@@ -4,16 +4,34 @@
 #define DATA_FILE "newdata.csv"
 #define CONFIG_FILE "settings.conf"
 
+// Struct til hver måling
 typedef struct {
     long time_unix;
     int water;
 } measurement;
 
+
+typedef struct {
+        char timestamp[26];
+        int water_diff;
+        char file_path[26];
+        int sec_per_unit;
+} data_for_output;
+
+data_for_output output[4] = {
+    {"", 0, "./output/hours.txt", 3600},
+    {"", 0, "./output/days.txt", 86400},
+    {"", 0, "./output/weeks.txt", 604800},
+    {"", 0, "./output/four_weeks.txt", 2419200}
+};
+
+
+
 int read_config(int* alarm_time);
 int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
-void calc_consumption(measurement measurements[], int length);
-int water_per(measurement measurements[], int length, int time);
+void calc_consumption(measurement measurements[], int length, data_for_output output[]);
+data_for_output water_per_x(measurement measurements[], int length, data_for_output data);
 int time_since_zero(measurement measurements[], int length);
 void print_alarm(int time);
 int format_time(long time_unix, char time_UTC[]);
@@ -33,7 +51,7 @@ int main(void) {
     length = get_length(fp); // Finder linjeantal i fil
     measurement measurements[length]; // Laver en array til målinger 
     get_data(fp, measurements, length);
-    calc_consumption(measurements, length);
+    calc_consumption(measurements, length, output);
     time_since_zero(measurements, length);
     fclose(fp);
     return 0;
@@ -88,42 +106,34 @@ int get_data(FILE* fp, measurement measurements[], int length) { //Funktion til 
     } while (!feof(fp));
 }
 
-void calc_consumption(measurement measurements[], int length) {
-    int hour,
-        day,
-        week,
-        four_weeks;
-    hour = water_per(measurements, length, 3600);
-    day = water_per(measurements, length, 86400);
-    week = water_per(measurements, length, 604800);
-    four_weeks = water_per(measurements, length, 2419200);
-    printf("last hour consumption was %d litres\n", hour);
-    printf("last day consumption was %d litres\n", day);
-    printf("last week consumption was %d litres\n", week);
-    printf("last four weeks consumption was %d litres\n", four_weeks);
-    char time_UTC[26];
-    format_time(measurements[length - 1].time_unix, time_UTC);
-    printf("last measurement was %s\n", time_UTC);
+void calc_consumption(measurement measurements[], int length, data_for_output output[]) {
+    for(int i = 0; i < 5; i++) {
+        FILE *outp = fopen(output[i].file_path, "w");
+        output[i] = water_per_x(measurements, length, output[i]);
+        fprintf(outp, "%s: %d litres", output[i].timestamp, output[i].water_diff);
+        char time_UTC[26];
+        fclose(outp);
+    }
 }
 
-int water_per(measurement measurements[], int length, int time) { // Funktion til at beregne forbrug sidste time
+data_for_output water_per_x(measurement measurements[], int length, data_for_output data) { // Funktion til at beregne forbrug sidste time
     double ave;
     int i,
         current_water,
-        start_water,
-        diff;
+        start_water;
     long current_time,
          start_time;
     // Finder sidst målte værdi:
     current_water = measurements[length - 1].water;
     current_time = measurements[length - 1].time_unix;
     // Finder først målte værdi:
-    start_time = current_time - time;
+    start_time = current_time - data.sec_per_unit;
     for(i = length - 1; i >= 0 && measurements[i - 1].time_unix >= start_time; i--);
     start_water = measurements[i].water;
     // Beregner forskel:
-    diff = current_water - start_water;
-    return diff;
+    data.water_diff = current_water - start_water;
+    format_time(current_time, data.timestamp);
+    return data;
 }
 
 int time_since_zero(measurement measurements[], int length) {
