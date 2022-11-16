@@ -105,8 +105,9 @@ void calc_start_of_time(measurement first, int results[3]) {
         w += SEC_PER_WEEK;
     }
     printf("time until next whole week is %d\n", w);
-    int results[3] = {h, d, w};
-    return results;
+    results[0] = h;
+    results[1] = d;
+    results[2] = w;
 }
 
 int read_config(int* alarm_time) {
