@@ -1,15 +1,20 @@
 #include <stdio.h>
 #include <time.h>
+#include <string.h>
 
 #define DATA_FILE "newdata.csv"
 #define CONFIG_FILE "settings.conf"
+#define SEC_PER_MIN 60
+#define SEC_PER_HOUR 3600
+#define SEC_PER_DAY 86400
+#define SEC_PER_WEEK 604800
+#define SEC_PER_FOUR_WEEKS 2419200
 
 // Struct til hver måling
 typedef struct {
     long time_unix;
     int water;
 } measurement;
-
 
 typedef struct {
         char timestamp[26];
@@ -19,17 +24,16 @@ typedef struct {
 } data_for_output;
 
 data_for_output output[4] = {
-    {"", 0, "./output/hours.txt", 3600},
-    {"", 0, "./output/days.txt", 86400},
-    {"", 0, "./output/weeks.txt", 604800},
-    {"", 0, "./output/four_weeks.txt", 2419200}
+    {"", 0, "./output/hours.txt", SEC_PER_HOUR},
+    {"", 0, "./output/days.txt", SEC_PER_DAY},
+    {"", 0, "./output/weeks.txt", SEC_PER_WEEK},
+    {"", 0, "./output/four_weeks.txt", SEC_PER_FOUR_WEEKS}
 };
-
-
 
 int read_config(int* alarm_time);
 int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
+void calc_start_of_time(measurement first, int results[3]);
 void calc_consumption(measurement measurements[], int length, data_for_output output[]);
 data_for_output water_per_x(measurement measurements[], int length, data_for_output data);
 int time_since_zero(measurement measurements[], int length);
@@ -39,6 +43,7 @@ int format_time(long time_unix, char time_UTC[]);
 int main(void) {
     //Reading configuration
     int alarm_time;
+    int start_times[3];
     read_config(&alarm_time);
     FILE* fp;
     int length;
@@ -51,10 +56,57 @@ int main(void) {
     length = get_length(fp); // Finder linjeantal i fil
     measurement measurements[length]; // Laver en array til målinger 
     get_data(fp, measurements, length);
+    calc_start_of_time(measurements[0], start_times);
     calc_consumption(measurements, length, output);
     time_since_zero(measurements, length);
     fclose(fp);
     return 0;
+}
+
+void calc_start_of_time(measurement first, int results[3]) {
+    int m, h, d, w,
+        input_s, input_m, input_h, input_d;
+    char time_UTC[26];
+    char input_d_char[3];
+    char weekdays[7][3] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+    // Formatterer tiden læseligt
+    format_time(first.time_unix, time_UTC);
+    printf("%s\n", time_UTC);
+    // Lægger starttiden ind i sekunder, minutter, timer
+    input_s = 10 * (int)(time_UTC[21] - 48) + (int)(time_UTC[22] - 48);
+    input_m = 10 * (int)(time_UTC[18] - 48) + (int)(time_UTC[19] - 48);
+    input_h = 10 * (int)(time_UTC[15] - 48) + (int)(time_UTC[16] - 48);
+    // Lægger dagen fra formatteret tid over i ny array
+    for(int i = 0; i < 3; i++) {
+        input_d_char[i] = time_UTC[i];
+    }
+    // Lægger dag over i et integer (mandag = 0, tirsdag = 1...)
+    for(int i = 0; i < 7; i++) {
+        if(strncmp(weekdays[i], input_d_char, 3) == 0) {
+            input_d = i;
+            break;
+        }
+    }
+    printf("input_d is %d\n", input_d);
+    // Calculating number of seconds until next full minute, hour, day, week
+    m = (60 - input_s) % 60;
+    h = (60 - input_m) % 60 * SEC_PER_MIN - input_s;
+    if(h < 0) { // Above can return a negative value for h. Fixed by this
+        h += SEC_PER_HOUR;
+    }
+    printf("time until next whole hour is %d\n", h);
+    d = (24 - input_h) % 24 * SEC_PER_HOUR - input_s - input_m * SEC_PER_MIN;
+    if(d < 0) {
+        d += SEC_PER_DAY;
+    }
+    printf("time until next whole day is %d\n", d);
+    w = (7 - input_d) % 7 * SEC_PER_DAY - input_s - input_m * SEC_PER_MIN - input_h * SEC_PER_HOUR;
+    if(w < 0) {
+        w += SEC_PER_WEEK;
+    }
+    printf("time until next whole week is %d\n", w);
+    int results[3] = {h, d, w};
+    return results;
 }
 
 int read_config(int* alarm_time) {
