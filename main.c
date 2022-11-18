@@ -18,24 +18,25 @@ typedef struct {
 
 typedef struct {
         char timestamp[26];
+        int time_unix;
         int water_diff;
         char file_path[26];
         int sec_per_unit;
 } data_for_output;
 
 data_for_output output[4] = {
-    {"", 0, "./output/hours.txt", SEC_PER_HOUR},
-    {"", 0, "./output/days.txt", SEC_PER_DAY},
-    {"", 0, "./output/weeks.txt", SEC_PER_WEEK},
-    {"", 0, "./output/four_weeks.txt", SEC_PER_FOUR_WEEKS}
+    {"", 0, 0, "./output/hours.txt", SEC_PER_HOUR},
+    {"", 0, 0, "./output/days.txt", SEC_PER_DAY},
+    {"", 0, 0, "./output/weeks.txt", SEC_PER_WEEK},
+    {"", 0, 0, "./output/four_weeks.txt", SEC_PER_FOUR_WEEKS}
 };
 
 int read_config(int* alarm_time);
 int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
 void calc_start_of_time(measurement first, int results[3]);
-void calc_consumption(measurement measurements[], int length, data_for_output output[]);
-data_for_output water_per_x(measurement measurements[], int length, data_for_output data);
+void output_to_files(measurement measurements[], int length, int start_times[]);
+int water_per_x(measurement measurements[], int length, int output_num);
 int time_since_zero(measurement measurements[], int length);
 void print_alarm(int time);
 int format_time(long time_unix, char time_UTC[]);
@@ -57,7 +58,7 @@ int main(void) {
     measurement measurements[length]; // Laver en array til målinger 
     get_data(fp, measurements, length);
     calc_start_of_time(measurements[0], start_times);
-    calc_consumption(measurements, length, output);
+    output_to_files(measurements, length, start_times);
     time_since_zero(measurements, length);
     fclose(fp);
     return 0;
@@ -123,13 +124,13 @@ int read_config(int* alarm_time) {
     char unit;
     fscanf(cp, "alarm_time = %d %c", &num, &unit);
     if(unit == 'w') {
-        factor = 604800;
+        factor = SEC_PER_WEEK;
     }
     else if(unit == 'd') {
-        factor = 86400;
+        factor = SEC_PER_DAY;
     }
     else if(unit == 'h') {
-        factor = 3600;
+        factor = SEC_PER_HOUR;
     }
     else {
         perror("Error with input. See file: settings.conf");
@@ -159,34 +160,59 @@ int get_data(FILE* fp, measurement measurements[], int length) { //Funktion til 
     } while (!feof(fp));
 }
 
-void calc_consumption(measurement measurements[], int length, data_for_output output[]) {
-    for(int i = 0; i < 5; i++) {
+void output_to_files(measurement measurements[], int length, int start_times[]) {
+    printf("output_to_files running ...\n");
+    printf("%s\n", output[0].file_path);
+    for(int i = 0; i < 4; i++) { // FOR HOURS, DAYS, WEEKS, FOUR WEEKS
         FILE *outp = fopen(output[i].file_path, "w");
-        output[i] = water_per_x(measurements, length, output[i]);
-        fprintf(outp, "%s: %d litres", output[i].timestamp, output[i].water_diff);
-        char time_UTC[26];
+        for(int j = 0; j < length; j++) {   // FOR SOMETHING ?????
+            output[i].time_unix = measurements[0].time_unix + start_times[i] + j * output[i].sec_per_unit;
+            int fail = water_per_x(measurements, length, i);
+            if (fail) {
+                break;
+            }
+            fprintf(outp, "%s: %d litres\n", output[i].timestamp, output[i].water_diff);
+        }
         fclose(outp);
     }
 }
 
-data_for_output water_per_x(measurement measurements[], int length, data_for_output data) { // Funktion til at beregne forbrug sidste time
+int water_per_x(measurement measurements[], int length, int output_num) { // Funktion til at beregne forbrug sidste time, day, uge eller 4 uger
     double ave;
     int i,
-        current_water,
+        end_water,
         start_water;
-    long current_time,
+    long end_time,
          start_time;
-    // Finder sidst målte værdi:
-    current_water = measurements[length - 1].water;
-    current_time = measurements[length - 1].time_unix;
-    // Finder først målte værdi:
-    start_time = current_time - data.sec_per_unit;
-    for(i = length - 1; i >= 0 && measurements[i - 1].time_unix >= start_time; i--);
-    start_water = measurements[i].water;
-    // Beregner forskel:
-    data.water_diff = current_water - start_water;
-    format_time(current_time, data.timestamp);
-    return data;
+    start_time = output[output_num].time_unix;
+    end_time = start_time + output[output_num].sec_per_unit;
+    for(i = 0; i < length; i++) {
+        if(start_time > measurements[length - 1].time_unix) {
+            printf("ERROR\n");
+            return 1;
+        }
+        if(measurements[i].time_unix >= start_time) {
+            start_water = measurements[i].water;
+            break;
+        }
+    }
+    for(i += 1; i < length; i++) {
+        if(measurements[i].time_unix >= end_time + output[output_num].sec_per_unit / 2) { // Safety measure in case of not often enough measurements, max is 1,5 of unit (eg. 1,5 hours)
+            end_water = start_water;
+            printf("ERROR 2\n ");
+            break;
+        }
+        if(measurements[i].time_unix >= end_time) {
+            end_water = measurements[i].water;
+            break;
+        }
+        if(i == length - 1) {
+            end_water = measurements[length - 1].water;
+        }
+    }
+    output[output_num].water_diff = end_water - start_water;
+    format_time(start_time, output[output_num].timestamp);
+    return 0;
 }
 
 int time_since_zero(measurement measurements[], int length) {
