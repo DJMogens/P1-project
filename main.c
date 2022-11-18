@@ -37,8 +37,8 @@ int get_data(FILE* fp, measurement measurements[], int length);
 void calc_start_of_time(measurement first, int results[3]);
 void output_to_files(measurement measurements[], int length, int start_times[]);
 int water_per_x(measurement measurements[], int length, int output_num);
-int time_since_zero(measurement measurements[], int length);
-void print_alarm(int time);
+int time_since_zero(measurement measurements[], int length, int alarm_time);
+void print_alarm(int time, int alarm_time);
 int format_time(long time_unix, char time_UTC[]);
 
 int main(void) {
@@ -59,12 +59,13 @@ int main(void) {
     get_data(fp, measurements, length);
     calc_start_of_time(measurements[0], start_times);
     output_to_files(measurements, length, start_times);
-    time_since_zero(measurements, length);
+    time_since_zero(measurements, length, alarm_time);
     fclose(fp);
     return 0;
 }
 
 void calc_start_of_time(measurement first, int results[3]) {
+    printf("calc_start_of_time running ...\n");
     int m, h, d, w,
         input_s, input_m, input_h, input_d;
     char time_UTC[26];
@@ -72,7 +73,6 @@ void calc_start_of_time(measurement first, int results[3]) {
     char weekdays[7][3] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
     // Formatterer tiden læseligt
     format_time(first.time_unix, time_UTC);
-    printf("%s\n", time_UTC);
     // Lægger starttiden ind i sekunder, minutter, timer
     input_s = 10 * (int)(time_UTC[21] - 48) + (int)(time_UTC[22] - 48);
     input_m = 10 * (int)(time_UTC[18] - 48) + (int)(time_UTC[19] - 48);
@@ -88,30 +88,27 @@ void calc_start_of_time(measurement first, int results[3]) {
             break;
         }
     }
-    printf("input_d is %d\n", input_d);
     // Calculating number of seconds until next full minute, hour, day, week
     m = (60 - input_s) % 60;
     h = (60 - input_m) % 60 * SEC_PER_MIN - input_s;
     if(h < 0) { // Above can return a negative value for h. Fixed by this
         h += SEC_PER_HOUR;
     }
-    printf("time until next whole hour is %d\n", h);
     d = (24 - input_h) % 24 * SEC_PER_HOUR - input_s - input_m * SEC_PER_MIN;
     if(d < 0) {
         d += SEC_PER_DAY;
     }
-    printf("time until next whole day is %d\n", d);
     w = (7 - input_d) % 7 * SEC_PER_DAY - input_s - input_m * SEC_PER_MIN - input_h * SEC_PER_HOUR;
     if(w < 0) {
         w += SEC_PER_WEEK;
     }
-    printf("time until next whole week is %d\n", w);
     results[0] = h;
     results[1] = d;
     results[2] = w;
 }
 
 int read_config(int* alarm_time) {
+    printf("Reading config ...\n");
     FILE* cp;
     int input = 1;
     cp = fopen(CONFIG_FILE, "r");
@@ -142,17 +139,18 @@ int read_config(int* alarm_time) {
 }
 
 int get_length(FILE* fp) { //Funktion til at tælle antallet af datasæt
+    printf("Getting length of data ...\n");
     int sz;
     int length;
     fseek(fp, 0L, SEEK_END);
     sz = ftell(fp);
     rewind(fp);
     length = (sz + 2)/21; //OBS: skal rettes, hvis dataen fylder mere/mindre per linje
-    printf("length of file is %d\n", length);
     return length;
 }
 
 int get_data(FILE* fp, measurement measurements[], int length) { //Funktion til at indlæse data fra fil
+    printf("Getting data ...\n");
     int line = 0; // variabel til at tælle linjetallet
     do {
         fscanf(fp, "%ld,%d", &measurements[line].time_unix, &measurements[line].water);
@@ -162,10 +160,9 @@ int get_data(FILE* fp, measurement measurements[], int length) { //Funktion til 
 
 void output_to_files(measurement measurements[], int length, int start_times[]) {
     printf("output_to_files running ...\n");
-    printf("%s\n", output[0].file_path);
     for(int i = 0; i < 4; i++) { // FOR HOURS, DAYS, WEEKS, FOUR WEEKS
         FILE *outp = fopen(output[i].file_path, "w");
-        for(int j = 0; j < length; j++) {   // FOR SOMETHING ?????
+        for(int j = 0; j < length; j++) {
             output[i].time_unix = measurements[0].time_unix + start_times[i] + j * output[i].sec_per_unit;
             int fail = water_per_x(measurements, length, i);
             if (fail) {
@@ -187,26 +184,30 @@ int water_per_x(measurement measurements[], int length, int output_num) { // Fun
     start_time = output[output_num].time_unix;
     end_time = start_time + output[output_num].sec_per_unit;
     for(i = 0; i < length; i++) {
+        // Stops loop here and inner loop in output_to_files, because the start time is later than the last measurement
         if(start_time > measurements[length - 1].time_unix) {
-            printf("ERROR\n");
             return 1;
         }
-        if(measurements[i].time_unix >= start_time) {
+        // This is the value we are looking for
+        if(measurements[i].time_unix >= start_time) { // 
             start_water = measurements[i].water;
             break;
         }
     }
     for(i += 1; i < length; i++) {
-        if(measurements[i].time_unix >= end_time + output[output_num].sec_per_unit / 2) { // Safety measure in case of not often enough measurements, max is 1,5 of unit (eg. 1,5 hours)
+        // Safety measure in case of not often enough measurements, max is 1,5 of unit (eg. 1,5 hours)
+        if(measurements[i].time_unix >= end_time + output[output_num].sec_per_unit / 2) { 
             end_water = start_water;
             printf("ERROR 2\n ");
             break;
         }
+        // This is the value we are looking for in most cases
         if(measurements[i].time_unix >= end_time) {
             end_water = measurements[i].water;
             break;
         }
-        if(i == length - 1) {
+        //If it is the last measurement, then the end water is the last water value. Eg., if hour started at 12:00, it is now 12:30, the result is the water used between 12:00 and 12:30.
+        if(i == length - 1) { 
             end_water = measurements[length - 1].water;
         }
     }
@@ -215,11 +216,11 @@ int water_per_x(measurement measurements[], int length, int output_num) { // Fun
     return 0;
 }
 
-int time_since_zero(measurement measurements[], int length) {
+int time_since_zero(measurement measurements[], int length, int alarm_time) {
+    printf("time_since_zero running ...\n");
     int time = 0;
     for(int i = length - 1; i >= 0; i--) {
         if(measurements[i].water == measurements[i - 1].water) {
-            printf("%d\n", i);
             time = measurements[length - 1].time_unix - measurements[i].time_unix;
             if(time == 0) {
                 time = 1;
@@ -227,16 +228,21 @@ int time_since_zero(measurement measurements[], int length) {
             break;
         }
     }
-    print_alarm(time);
+    print_alarm(time, alarm_time);
 }
 
-void print_alarm(int time) {
-    int weeks = time / 604800,
-        days = (time % 604800) / 86400,
-        hours = (time % 86400) / 3600,
-        minutes = (time % 3600) / 60,
-        seconds = (time % 60);
-    if(time > 0) {
+void print_alarm(int time, int alarm_time) {
+    printf("print_alarm running ...\n");
+    int weeks = time / SEC_PER_WEEK,
+        days = (time % SEC_PER_WEEK) / SEC_PER_DAY,
+        hours = (time % SEC_PER_DAY) / SEC_PER_HOUR,
+        minutes = (time % SEC_PER_HOUR) / SEC_PER_MIN,
+        seconds = (time % SEC_PER_MIN);
+    if(time == 0) {
+        printf("There was no null value of change found in the data!");
+    }
+    if(time > alarm_time) {
+        printf("BEEP BEEP!\n");
         printf("It has been ");
         if(weeks > 0) {
             printf("%d weeks,", weeks);
@@ -253,10 +259,7 @@ void print_alarm(int time) {
         if(seconds > 0) {
             printf("%d seconds, ", seconds);
         }
-        printf("since the last time there was no change between measurements.");
-    }
-    else {
-        printf("There was no null value of change found in the data.");
+        printf("since the last time there was no change between measurements.\n");
     }
 }
 

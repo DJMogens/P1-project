@@ -19,7 +19,7 @@ int main(void) {
             }
         }
         fprintf(fp, "%d\n", new_water);
-        num = rand() % 10;
+        num = rand() % 20;
         new_water += num;
     }
 
