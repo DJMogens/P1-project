@@ -10,12 +10,13 @@
 #define SEC_PER_WEEK 604800
 #define SEC_PER_FOUR_WEEKS 2419200
 
-// Struct til hver måling
+// Struct til hver måling fra data-fil
 typedef struct {
     long time_unix;
     int water;
 } measurement;
 
+// Struct til output (+ beregninger)
 typedef struct {
         char timestamp[26];
         int time_unix;
@@ -64,7 +65,7 @@ int main(void) {
     return 0;
 }
 
-void calc_start_of_time(measurement first, int results[3]) {
+void calc_start_of_time(measurement first, int results[3]) { // Beregner, hvor lang tid, der går, indtil ny hel time, dag og uge
     printf("calc_start_of_time running ...\n");
     int m, h, d, w,
         input_s, input_m, input_h, input_d;
@@ -107,7 +108,7 @@ void calc_start_of_time(measurement first, int results[3]) {
     results[2] = w;
 }
 
-int read_config(int* alarm_time) {
+int read_config(int* alarm_time) { // Læser konfiguration fra config-fil
     printf("Reading config ...\n");
     FILE* cp;
     int input = 1;
@@ -138,7 +139,7 @@ int read_config(int* alarm_time) {
     return 0;
 }
 
-int get_length(FILE* fp) { //Funktion til at tælle antallet af datasæt
+int get_length(FILE* fp) { // Tæller antallet af datasæt
     printf("Getting length of data ...\n");
     int sz;
     int length;
@@ -149,7 +150,7 @@ int get_length(FILE* fp) { //Funktion til at tælle antallet af datasæt
     return length;
 }
 
-int get_data(FILE* fp, measurement measurements[], int length) { //Funktion til at indlæse data fra fil
+int get_data(FILE* fp, measurement measurements[], int length) { //Indlæser data fra fil
     printf("Getting data ...\n");
     int line = 0; // variabel til at tælle linjetallet
     do {
@@ -158,7 +159,7 @@ int get_data(FILE* fp, measurement measurements[], int length) { //Funktion til 
     } while (!feof(fp));
 }
 
-void output_to_files(measurement measurements[], int length, int start_times[]) {
+void output_to_files(measurement measurements[], int length, int start_times[]) { // Sender output til filer (hours.txt, days.txt etc.)
     printf("output_to_files running ...\n");
     for(int i = 0; i < 4; i++) { // FOR HOURS, DAYS, WEEKS, FOUR WEEKS
         FILE *outp = fopen(output[i].file_path, "w");
@@ -174,7 +175,7 @@ void output_to_files(measurement measurements[], int length, int start_times[]) 
     }
 }
 
-int water_per_x(measurement measurements[], int length, int output_num) { // Funktion til at beregne forbrug sidste time, day, uge eller 4 uger
+int water_per_x(measurement measurements[], int length, int output_num) { // Beregner forbrug sidste time, day, uge eller 4 uger
     double ave;
     int i,
         end_water,
@@ -216,7 +217,7 @@ int water_per_x(measurement measurements[], int length, int output_num) { // Fun
     return 0;
 }
 
-int time_since_zero(measurement measurements[], int length, int alarm_time) {
+int time_since_zero(measurement measurements[], int length, int alarm_time) { // Beregner, hvor lang tid der er gået siden sidst, der ikke var ændring mellem målinger
     printf("time_since_zero running ...\n");
     int time = 0;
     for(int i = length - 1; i >= 0; i--) {
@@ -231,7 +232,7 @@ int time_since_zero(measurement measurements[], int length, int alarm_time) {
     print_alarm(time, alarm_time);
 }
 
-void print_alarm(int time, int alarm_time) {
+void print_alarm(int time, int alarm_time) { // Printer alarm, hvis der er gået for lang tid siden sidste nul-ændring mellem målinger
     printf("print_alarm running ...\n");
     int weeks = time / SEC_PER_WEEK,
         days = (time % SEC_PER_WEEK) / SEC_PER_DAY,
@@ -263,7 +264,7 @@ void print_alarm(int time, int alarm_time) {
     }
 }
 
-int format_time(long time_unix, char time_UTC[]) {
+int format_time(long time_unix, char time_UTC[]) { // Formatterer unix-tid til læseligt format
     struct tm time_struct;
     time_t rawtime = time_unix;
     time_struct = *localtime(&rawtime);
