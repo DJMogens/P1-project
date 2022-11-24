@@ -41,7 +41,7 @@ void output_to_files(measurement measurements[], int length, int start_times[]);
 int water_per_x(measurement measurements[], int length, int output_num);
 int time_since_zero(measurement measurements[], int length, int alarm_time);
 void print_alarm(int time, int alarm_time);
-int format_time(long time_unix, char time_UTC[]);
+int format_time(long time_unix, char time_UTC[], struct tm *time_struct);
 
 int main(void) {
     //Reading configuration
@@ -68,41 +68,22 @@ int main(void) {
 
 void calc_start_of_time(measurement first, int results[3]) { // Beregner, hvor lang tid, der går, indtil ny hel time, dag og uge
     printf("calc_start_of_time running ...\n");
-    int m, h, d, w,
-        input_s, input_m, input_h, input_d;
+    int m, h, d, w;
     char time_UTC[26];
-    char input_d_char[3];
-    char weekdays[7][3] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
-    // Formatterer tiden læseligt
-    format_time(first.time_unix, time_UTC);
-    // Lægger starttiden ind i sekunder, minutter, timer
-    input_s = 10 * (int)(time_UTC[21] - 48) + (int)(time_UTC[22] - 48);
-    int inp = atoi(&time_UTC[21]);
-    printf("%d %d\n", input_s, inp);
-    input_m = 10 * (int)(time_UTC[18] - 48) + (int)(time_UTC[19] - 48);
-    input_h = 10 * (int)(time_UTC[15] - 48) + (int)(time_UTC[16] - 48);
-    // Lægger dagen fra formatteret tid over i ny array
-    for(int i = 0; i < 3; i++) {
-        input_d_char[i] = time_UTC[i];
-    }
-    // Lægger dag over i et integer (mandag = 0, tirsdag = 1...)
-    for(int i = 0; i < 7; i++) {
-        if(strncmp(weekdays[i], input_d_char, 3) == 0) {
-            input_d = i;
-            break;
-        }
-    }
+    struct tm time_struct;
+    format_time(first.time_unix, time_UTC, &time_struct);
+    time_struct.tm_wday--;
     // Calculating number of seconds until next full minute, hour, day, week
-    m = (60 - input_s) % 60;
-    h = (60 - input_m) % 60 * SEC_PER_MIN - input_s;
+    m = (60 - time_struct.tm_sec) % 60;
+    h = (60 - time_struct.tm_min) % 60 * SEC_PER_MIN - time_struct.tm_sec;
     if(h < 0) { // Above can return a negative value for h. Fixed by this
         h += SEC_PER_HOUR;
     }
-    d = (24 - input_h) % 24 * SEC_PER_HOUR - input_s - input_m * SEC_PER_MIN;
+    d = (24 - time_struct.tm_hour) % 24 * SEC_PER_HOUR - time_struct.tm_sec - time_struct.tm_min * SEC_PER_MIN;
     if(d < 0) {
         d += SEC_PER_DAY;
     }
-    w = (7 - input_d) % 7 * SEC_PER_DAY - input_s - input_m * SEC_PER_MIN - input_h * SEC_PER_HOUR;
+    w = (7 - time_struct.tm_wday) % 7 * SEC_PER_DAY - time_struct.tm_sec - time_struct.tm_min * SEC_PER_MIN - time_struct.tm_hour * SEC_PER_HOUR;
     if(w < 0) {
         w += SEC_PER_WEEK;
     }
@@ -220,7 +201,8 @@ int water_per_x(measurement measurements[], int length, int output_num) { // Ber
         }
     }
     output[output_num].water_diff = end_water - start_water;
-    format_time(start_time, output[output_num].timestamp);
+    struct tm time_struct;
+    format_time(start_time, output[output_num].timestamp, &time_struct);
     return 0;
 }
 
@@ -271,10 +253,9 @@ void print_alarm(int time, int alarm_time) { // Printer alarm, hvis der er gået
     }
 }
 
-int format_time(long time_unix, char time_UTC[]) { // Formatterer unix-tid til læseligt format
-    struct tm time_struct;
+int format_time(long time_unix, char time_UTC[], struct tm *time_struct) { // Formatterer unix-tid til læseligt format
     time_t rawtime = time_unix;
-    time_struct = *localtime(&rawtime);
-    strftime(time_UTC, 26, "%a %Y-%m-%d %H:%M:%S", &time_struct);
+    *time_struct = *localtime(&rawtime);
+    strftime(time_UTC, 26, "%a %Y-%m-%d %H:%M:%S", time_struct);
     return 0;
 }
