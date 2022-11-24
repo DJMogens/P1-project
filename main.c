@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <time.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define DATA_FILE "newdata.csv"
@@ -76,6 +77,8 @@ void calc_start_of_time(measurement first, int results[3]) { // Beregner, hvor l
     format_time(first.time_unix, time_UTC);
     // Lægger starttiden ind i sekunder, minutter, timer
     input_s = 10 * (int)(time_UTC[21] - 48) + (int)(time_UTC[22] - 48);
+    int inp = atoi(&time_UTC[21]);
+    printf("%d %d\n", input_s, inp);
     input_m = 10 * (int)(time_UTC[18] - 48) + (int)(time_UTC[19] - 48);
     input_h = 10 * (int)(time_UTC[15] - 48) + (int)(time_UTC[16] - 48);
     // Lægger dagen fra formatteret tid over i ny array
@@ -184,32 +187,36 @@ int water_per_x(measurement measurements[], int length, int output_num) { // Ber
          start_time;
     start_time = output[output_num].time_unix;
     end_time = start_time + output[output_num].sec_per_unit;
+    char looking_for = 's';
     for(i = 0; i < length; i++) {
-        // Stops loop here and inner loop in output_to_files, because the start time is later than the last measurement
-        if(start_time > measurements[length - 1].time_unix) {
-            return 1;
+        if(looking_for == 's') { // Looking for the start value
+            // Stops loop here and inner loop in output_to_files, because the start time is later than the last measurement
+            if(start_time > measurements[length - 1].time_unix) {
+                return 1;
+            }
+            // This is the value we are looking for
+            if(measurements[i].time_unix >= start_time) { // 
+                start_water = measurements[i].water;
+                looking_for = 'e';
+                continue;
+            }
         }
-        // This is the value we are looking for
-        if(measurements[i].time_unix >= start_time) { // 
-            start_water = measurements[i].water;
-            break;
-        }
-    }
-    for(i += 1; i < length; i++) {
-        // Safety measure in case of not often enough measurements, max is 1,5 of unit (eg. 1,5 hours)
-        if(measurements[i].time_unix >= end_time + output[output_num].sec_per_unit / 2) { 
-            end_water = start_water;
-            printf("ERROR 2\n ");
-            break;
-        }
-        // This is the value we are looking for in most cases
-        if(measurements[i].time_unix >= end_time) {
-            end_water = measurements[i].water;
-            break;
-        }
-        //If it is the last measurement, then the end water is the last water value. Eg., if hour started at 12:00, it is now 12:30, the result is the water used between 12:00 and 12:30.
-        if(i == length - 1) { 
-            end_water = measurements[length - 1].water;
+        if(looking_for == 'e') { // Looking for the end value
+            // Safety measure in case of not often enough measurements, max is 1,5 of unit (eg. 1,5 hours)
+            if(measurements[i].time_unix >= end_time + output[output_num].sec_per_unit / 2) {
+                end_water = start_water;
+                printf("Warning: Not often enough measurements\n ");
+                break;
+            }
+            // This is the value we are looking for in most cases
+            if(measurements[i].time_unix >= end_time) {
+                end_water = measurements[i].water;
+                break;
+            }
+            //If it is the last measurement, then the end water is the last water value. Eg., if hour started at 12:00, it is now 12:30, the result is the water used between 12:00 and 12:30.
+            if(i == length - 1) { 
+                end_water = measurements[length - 1].water;
+            }
         }
     }
     output[output_num].water_diff = end_water - start_water;
