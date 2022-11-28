@@ -24,13 +24,16 @@ typedef struct {
         int water_diff;
         char file_path[26];
         int sec_per_unit;
+        char name[12];
+        char time_fmt[10];
+        char time_unit[10];
 } data_for_output;
 
 data_for_output output[4] = {
-    {"", 0, 0, "./output/hours.txt", SEC_PER_HOUR},
-    {"", 0, 0, "./output/days.txt", SEC_PER_DAY},
-    {"", 0, 0, "./output/weeks.txt", SEC_PER_WEEK},
-    {"", 0, 0, "./output/four_weeks.txt", SEC_PER_FOUR_WEEKS}
+    {"", 0, 0, "./output/hours.txt", SEC_PER_HOUR, "hours", "\"\%H:\%M\"", "HH:MM"},
+    {"", 0, 0, "./output/days.txt", SEC_PER_DAY, "days", "\"\%m-\%d\"", "mm-dd"},
+    {"", 0, 0, "./output/weeks.txt", SEC_PER_WEEK, "weeks", "\"\%m-\%d\"", "mm-dd"},
+    {"", 0, 0, "./output/four_weeks.txt", SEC_PER_FOUR_WEEKS, "four_weeks", "\"\%Y-\%m\"", "yyyy-mm"}
 };
 
 int read_config(int* alarm_time);
@@ -38,6 +41,7 @@ int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
 void calc_start_of_time(measurement first, int results[3]);
 void output_to_files(measurement measurements[], int length, int start_times[]);
+void create_graph(int output_num);
 int water_per_x(measurement measurements[], int length, int output_num);
 int time_since_zero(measurement measurements[], int length, int alarm_time);
 void print_alarm(int time, int alarm_time);
@@ -153,10 +157,34 @@ void output_to_files(measurement measurements[], int length, int start_times[]) 
             if (fail) {
                 break;
             }
-            fprintf(outp, "%s: %d litres\n", output[i].timestamp, output[i].water_diff);
+            fprintf(outp, "%s; %d\n", output[i].timestamp, output[i].water_diff);
         }
+        create_graph(i);
         fclose(outp);
+    }   
+}
+
+void create_graph(int output_num) {
+    const int num_commands = 8;
+    char* commandsForGnuplot[] = {
+        "set datafile separator \";\"",
+        "set ylabel 'water (litres)'",
+        "set xdata time",
+        "set timefmt '%a %Y-%m-%d %H:%M:%S'",
+        "set grid",
+        "set autoscale",
+        "set terminal png size 2000,1000 enhanced font \"Arial,20\"",
+        "set style fill solid 1.00 border 0"
+    };
+    FILE* gnuplotPipe = popen("gnuplot -persistent", "w");
+    for(int i = 0; i < num_commands; i++) {
+        fprintf(gnuplotPipe, "%s \n", commandsForGnuplot[i]);
     }
+    fprintf(gnuplotPipe, "set xlabel 'time (%s)' \n", output[output_num].time_unit);
+    fprintf(gnuplotPipe, "set title '%s' \n", output[output_num].name);
+    fprintf(gnuplotPipe, "set format x %s \n",  output[output_num].time_fmt);
+    fprintf(gnuplotPipe, "set output '.\\output\\%s.png' \n", output[output_num].name);
+    fprintf(gnuplotPipe, "plot '%s' using 1:2 with boxes linecolor rgb \"red\" \n", output[output_num].file_path);
 }
 
 int water_per_x(measurement measurements[], int length, int output_num) { // Beregner forbrug sidste time, day, uge eller 4 uger
