@@ -19,21 +19,27 @@ typedef struct {
 
 // Struct til output (+ beregninger)
 typedef struct {
-        char timestamp[26];
+    struct {
         int time_unix;
         int water_diff;
-        char file_path[26];
         int sec_per_unit;
+    } calc;
+    struct {
+        char timestamp[26];
+        char file_path[26];
+    } txt;
+    struct {
         char name[12];
         char time_fmt[10];
         char time_unit[10];
+    } graph;
 } data_for_output;
 
 data_for_output output[4] = {
-    {"", 0, 0, "./output/hours.txt", SEC_PER_HOUR, "hours", "\"\%H:\%M\"", "HH:MM"},
-    {"", 0, 0, "./output/days.txt", SEC_PER_DAY, "days", "\"\%m-\%d\"", "mm-dd"},
-    {"", 0, 0, "./output/weeks.txt", SEC_PER_WEEK, "weeks", "\"\%m-\%d\"", "mm-dd"},
-    {"", 0, 0, "./output/four_weeks.txt", SEC_PER_FOUR_WEEKS, "four_weeks", "\"\%Y-\%m\"", "yyyy-mm"}
+    {0, 0, SEC_PER_HOUR, "", "./output/hours.txt", "hours", "\"\%H:\%M\"", "HH:MM"},
+    {0, 0, SEC_PER_DAY, "", "./output/days.txt", "days", "\"\%m-\%d\"", "mm-dd"},
+    {0, 0, SEC_PER_WEEK, "", "./output/weeks.txt", "weeks", "\"\%m-\%d\"", "mm-dd"},
+    {0, 0, SEC_PER_FOUR_WEEKS, "", "./output/four_weeks.txt", "four_weeks", "\"\%Y-\%m\"", "yyyy-mm"}
 };
 
 int read_config(int* alarm_time);
@@ -150,14 +156,14 @@ int get_data(FILE* fp, measurement measurements[], int length) { //Indlæser dat
 void output_to_files(measurement measurements[], int length, int start_times[]) { // Sender output til filer (hours.txt, days.txt etc.)
     printf("output_to_files running ...\n");
     for(int i = 0; i < 4; i++) { // FOR HOURS, DAYS, WEEKS, FOUR WEEKS
-        FILE *outp = fopen(output[i].file_path, "w");
+        FILE *outp = fopen(output[i].txt.file_path, "w");
         for(int j = 0; j < length; j++) {
-            output[i].time_unix = measurements[0].time_unix + start_times[i] + j * output[i].sec_per_unit;
+            output[i].calc.time_unix = measurements[0].time_unix + start_times[i] + j * output[i].calc.sec_per_unit;
             int fail = water_per_x(measurements, length, i);
             if (fail) {
                 break;
             }
-            fprintf(outp, "%s; %d\n", output[i].timestamp, output[i].water_diff);
+            fprintf(outp, "%s; %d\n", output[i].txt.timestamp, output[i].calc.water_diff);
         }
         create_graph(i);
         fclose(outp);
@@ -180,11 +186,11 @@ void create_graph(int output_num) {
     for(int i = 0; i < num_commands; i++) {
         fprintf(gnuplotPipe, "%s \n", commandsForGnuplot[i]);
     }
-    fprintf(gnuplotPipe, "set xlabel 'time (%s)' \n", output[output_num].time_unit);
-    fprintf(gnuplotPipe, "set title '%s' \n", output[output_num].name);
-    fprintf(gnuplotPipe, "set format x %s \n",  output[output_num].time_fmt);
-    fprintf(gnuplotPipe, "set output '.\\output\\%s.png' \n", output[output_num].name);
-    fprintf(gnuplotPipe, "plot '%s' using 1:2 with boxes linecolor rgb \"red\" \n", output[output_num].file_path);
+    fprintf(gnuplotPipe, "set xlabel 'time (%s)' \n", output[output_num].graph.time_unit);
+    fprintf(gnuplotPipe, "set title '%s' \n", output[output_num].graph.name);
+    fprintf(gnuplotPipe, "set format x %s \n",  output[output_num].graph.time_fmt);
+    fprintf(gnuplotPipe, "set output '.\\output\\%s.png' \n", output[output_num].graph.name);
+    fprintf(gnuplotPipe, "plot '%s' using 1:2 with boxes linecolor rgb \"red\" \n", output[output_num].txt.file_path);
 }
 
 int water_per_x(measurement measurements[], int length, int output_num) { // Beregner forbrug sidste time, day, uge eller 4 uger
@@ -194,8 +200,8 @@ int water_per_x(measurement measurements[], int length, int output_num) { // Ber
         start_water;
     long end_time,
          start_time;
-    start_time = output[output_num].time_unix;
-    end_time = start_time + output[output_num].sec_per_unit;
+    start_time = output[output_num].calc.time_unix;
+    end_time = start_time + output[output_num].calc.sec_per_unit;
     char looking_for = 's';
     for(i = 0; i < length; i++) {
         if(looking_for == 's') { // Looking for the start value
@@ -212,7 +218,7 @@ int water_per_x(measurement measurements[], int length, int output_num) { // Ber
         }
         if(looking_for == 'e') { // Looking for the end value
             // Safety measure in case of not often enough measurements, max is 1,5 of unit (eg. 1,5 hours)
-            if(measurements[i].time_unix >= end_time + output[output_num].sec_per_unit / 2) {
+            if(measurements[i].time_unix >= end_time + output[output_num].calc.sec_per_unit / 2) {
                 end_water = start_water;
                 printf("Warning: Not often enough measurements\n ");
                 break;
@@ -228,9 +234,9 @@ int water_per_x(measurement measurements[], int length, int output_num) { // Ber
             }
         }
     }
-    output[output_num].water_diff = end_water - start_water;
+    output[output_num].calc.water_diff = end_water - start_water;
     struct tm time_struct;
-    format_time(start_time, output[output_num].timestamp, &time_struct);
+    format_time(start_time, output[output_num].txt.timestamp, &time_struct);
     return 0;
 }
 
