@@ -47,6 +47,7 @@ int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
 void calc_sec_in_month(long int time_unix);
 void calc_start_of_time(measurement first, int results[3]);
+int check_leap_year(int year);
 void output_to_files(measurement measurements[], int length, int start_times[]);
 void create_graph(int output_num);
 int water_per_x(measurement measurements[], int length, int output_num);
@@ -207,7 +208,17 @@ void calc_sec_in_month(long int time_unix) {
     char irr_time[26];
     format_time(time_unix, irr_time, &time_struct);
     int days_in_month = days_in_each_month[time_struct.tm_mon];
+    if(time_struct.tm_mon == 1 && check_leap_year(time_struct.tm_year + 1900)) {
+        days_in_month = 29; // Kontrollerer for skudår
+    }
     output[3].calc.sec_per_unit = SEC_PER_DAY * days_in_month;
+}
+
+int check_leap_year(int year) {
+    if(year % 400 == 0) return 1;
+    if(year % 100 == 0) return 0;
+    if(year % 4 == 0) return 1;
+    return 0;
 }
 
 int water_per_x(measurement measurements[], int length, int output_num) { // Beregner forbrug sidste time, day, uge eller 4 uger
