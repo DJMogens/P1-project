@@ -9,7 +9,7 @@
 #define SEC_PER_HOUR 3600
 #define SEC_PER_DAY 86400
 #define SEC_PER_WEEK 604800
-#define SEC_PER_FOUR_WEEKS 2419200
+#define SEC_PER_MONTH 2419200
 
 // Struct til hver måling fra data-fil
 typedef struct {
@@ -33,18 +33,19 @@ typedef struct {
         char time_fmt[10];
         char time_unit[10];
     } graph;
-} data_for_output;
+} data;
 
-data_for_output output[4] = {
+data output[4] = {
     {0, 0, SEC_PER_HOUR, "", "./output/hours.txt", "hours", "\"\%H:\%M\"", "HH:MM"},
     {0, 0, SEC_PER_DAY, "", "./output/days.txt", "days", "\"\%m-\%d\"", "mm-dd"},
     {0, 0, SEC_PER_WEEK, "", "./output/weeks.txt", "weeks", "\"\%m-\%d\"", "mm-dd"},
-    {0, 0, SEC_PER_FOUR_WEEKS, "", "./output/four_weeks.txt", "four_weeks", "\"\%Y-\%m\"", "yyyy-mm"}
+    {0, 0, SEC_PER_MONTH, "", "./output/month.txt", "month", "\"\%Y-\%m\"", "yyyy-mm"}
 };
 
 int read_config(int* alarm_time);
 int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
+void calc_sec_in_month(long int time_unix);
 void calc_start_of_time(measurement first, int results[3]);
 void output_to_files(measurement measurements[], int length, int start_times[]);
 void create_graph(int output_num);
@@ -56,7 +57,7 @@ int format_time(long time_unix, char time_UTC[], struct tm *time_struct);
 int main(void) {
     //Reading configuration
     int alarm_time;
-    int start_times[3];
+    int start_times[4];
     read_config(&alarm_time);
     FILE* fp;
     int length;
@@ -76,9 +77,9 @@ int main(void) {
     return 0;
 }
 
-void calc_start_of_time(measurement first, int results[3]) { // Beregner, hvor lang tid, der går, indtil ny hel time, dag og uge
+void calc_start_of_time(measurement first, int results[4]) { // Beregner, hvor lang tid, der går, indtil ny hel time, dag og uge
     printf("calc_start_of_time running ...\n");
-    int m, h, d, w;
+    int m, h, d, w, mon;
     char time_UTC[26];
     struct tm time_struct;
     format_time(first.time_unix, time_UTC, &time_struct);
@@ -97,9 +98,15 @@ void calc_start_of_time(measurement first, int results[3]) { // Beregner, hvor l
     if(w < 0) {
         w += SEC_PER_WEEK;
     }
+    calc_sec_in_month(first.time_unix);
+    mon = (output[3].calc.sec_per_unit - time_struct.tm_mday + 1) % output[3].calc.sec_per_unit * SEC_PER_DAY * output[3].calc.sec_per_unit - time_struct.tm_sec - time_struct.tm_min * SEC_PER_MIN - time_struct.tm_hour * SEC_PER_HOUR;
+    if(mon < 0) {
+        mon += output[3].calc.sec_per_unit;
+    }
     results[0] = h;
     results[1] = d;
     results[2] = w;
+    results[3] = mon;
 }
 
 int read_config(int* alarm_time) { // Læser konfiguration fra config-fil
@@ -155,15 +162,16 @@ int get_data(FILE* fp, measurement measurements[], int length) { //Indlæser dat
 
 void output_to_files(measurement measurements[], int length, int start_times[]) { // Sender output til filer (hours.txt, days.txt etc.)
     printf("output_to_files running ...\n");
-    for(int i = 0; i < 4; i++) { // FOR HOURS, DAYS, WEEKS, FOUR WEEKS
+    for(int i = 0; i < 4; i++) { // FOR HOURS, DAYS, WEEKS, MONTH
         FILE *outp = fopen(output[i].txt.file_path, "w");
+        output[i].calc.time_unix = measurements[0].time_unix + start_times[i];
         for(int j = 0; j < length; j++) {
-            output[i].calc.time_unix = measurements[0].time_unix + start_times[i] + j * output[i].calc.sec_per_unit;
             int fail = water_per_x(measurements, length, i);
             if (fail) {
                 break;
             }
             fprintf(outp, "%s; %d\n", output[i].txt.timestamp, output[i].calc.water_diff);
+            output[i].calc.time_unix += output[i].calc.sec_per_unit;
         }
         create_graph(i);
         fclose(outp);
@@ -176,9 +184,9 @@ void create_graph(int output_num) {
         "set datafile separator \";\"",
         "set ylabel 'water (litres)'",
         "set xdata time",
+        "set yrange [0:*]",
         "set timefmt '%a %Y-%m-%d %H:%M:%S'",
         "set grid",
-        "set autoscale",
         "set terminal png size 2000,1000 enhanced font \"Arial,20\"",
         "set style fill solid 1.00 border 0"
     };
@@ -193,6 +201,15 @@ void create_graph(int output_num) {
     fprintf(gnuplotPipe, "plot '%s' using 1:2 with boxes linecolor rgb \"red\" \n", output[output_num].txt.file_path);
 }
 
+void calc_sec_in_month(long int time_unix) {
+    int days_in_each_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    struct tm time_struct;
+    char irr_time[26];
+    format_time(time_unix, irr_time, &time_struct);
+    int days_in_month = days_in_each_month[time_struct.tm_mon];
+    output[3].calc.sec_per_unit = SEC_PER_DAY * days_in_month;
+}
+
 int water_per_x(measurement measurements[], int length, int output_num) { // Beregner forbrug sidste time, day, uge eller 4 uger
     double ave;
     int i,
@@ -201,7 +218,12 @@ int water_per_x(measurement measurements[], int length, int output_num) { // Ber
     long end_time,
          start_time;
     start_time = output[output_num].calc.time_unix;
+    if(output_num == 3) {
+        calc_sec_in_month(start_time);
+    }
     end_time = start_time + output[output_num].calc.sec_per_unit;
+    if(output_num == 3) {
+    }
     char looking_for = 's';
     for(i = 0; i < length; i++) {
         if(looking_for == 's') { // Looking for the start value

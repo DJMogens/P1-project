@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <time.h>
 
+
+
+
 int main(void) {
     FILE* fp;
     fp = fopen("newdata.csv", "w");
@@ -11,7 +14,7 @@ int main(void) {
         i;
     srand(time(0));
     
-    for(new_time = 1667257200; new_time < 1669849200; new_time += 300) {
+    for(new_time = 1667257200; new_time < 1682892000; new_time += 600) {
         fprintf(fp, "%ld,", new_time);
         for(i = 10; i <= 10000000; i *= 10) {
             if(new_water < i) {
