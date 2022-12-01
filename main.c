@@ -52,10 +52,11 @@ void calc_start_of_time(measurement first, int results[3]);
 int check_leap_year(int year);
 void output_to_files(measurement measurements[], int length, int start_times[]);
 void create_graph(int output_num);
-int water_per_x(measurement measurements[], int length, int output_num, long graph_start);
+int water_per_x(measurement measurements[], int length, int output_num, long graph_start, int correct_for_dst);
 int time_since_zero(measurement measurements[], int length, int alarm_time);
 void print_alarm(int time, int alarm_time);
 int format_time(long time_unix, char time_UTC[], struct tm *time_struct);
+int check_dst(long time_unix);
 
 int main(void) {
     //Reading configuration
@@ -171,6 +172,8 @@ void output_to_files(measurement measurements[], int length, int start_times[]) 
         int fail;
         do {
             calc_sec_in_month(output[i].calc.time_unix);
+            int is_dst_start = check_dst(output[i].calc.time_unix);
+            int correct_for_dst = 0;
             if(i == 0) {
                 struct tm graph_tm;
                 char time_UTC[26];
@@ -189,14 +192,22 @@ void output_to_files(measurement measurements[], int length, int start_times[]) 
             }
             graph_start = output[i].calc.time_unix;
             FILE *outp = fopen(output[i].txt.file_path, "w");
-            for(int j = 0; j < length; j++) {
-                fail = water_per_x(measurements, length, i, graph_start);
-                if (fail) {
-                    break;
+            do {
+                int is_dst_now = check_dst(output[i].calc.time_unix);
+                if(is_dst_start ^ is_dst_now) { // XOR is_dst_start (was DST when this output started) and if DST at start of this measurement
+                    correct_for_dst = is_dst_start - is_dst_now; // Will give 1 if DST switched on, -1 if DST switched off
+                    is_dst_start = is_dst_now;
                 }
-                fprintf(outp, "%s; %d\n", output[i].txt.timestamp, output[i].calc.water_diff);
-                output[i].calc.time_unix += output[i].calc.sec_per_unit;
-            }
+                if(i) {
+                    output[i].calc.time_unix += correct_for_dst * SEC_PER_HOUR;
+                    correct_for_dst = 0;
+                }
+                fail = water_per_x(measurements, length, i, graph_start, correct_for_dst);
+                if(!fail) {
+                    fprintf(outp, "%s; %d\n", output[i].txt.timestamp, output[i].calc.water_diff);
+                    output[i].calc.time_unix += output[i].calc.sec_per_unit;
+                }
+            } while (!fail);
             create_graph(i);
             fclose(outp);
         } while(i < 2 && fail == 2);
@@ -254,7 +265,7 @@ int check_leap_year(int year) {
     return 0;
 }
 
-int water_per_x(measurement measurements[], int length, int output_num, long graph_start) { // Beregner forbrug sidste time, day, uge eller 4 uger
+int water_per_x(measurement measurements[], int length, int output_num, long graph_start, int correct_for_dst) { // Beregner forbrug sidste time, day, uge eller 4 uger
     double ave;
     int i,
         end_water,
@@ -288,7 +299,7 @@ int water_per_x(measurement measurements[], int length, int output_num, long gra
                 break;
             }
             // Returns 2 if calculating for days and going to next month, or calculating for hours and going to next day
-            if((output_num == 0 && measurements[i].time_unix > graph_start + output[output_num + 1].calc.sec_per_unit) || (output_num == 1 && measurements[i].time_unix > graph_start + output[output_num + 2].calc.sec_per_unit)) {
+            if((output_num == 0 && measurements[i].time_unix > graph_start + output[output_num + 1].calc.sec_per_unit + correct_for_dst * SEC_PER_HOUR) || (output_num == 1 && measurements[i].time_unix > graph_start + output[output_num + 2].calc.sec_per_unit)) {
                 return 2;
             }
             // This is the value we are looking for in most cases
@@ -360,4 +371,12 @@ int format_time(long time_unix, char time_UTC[], struct tm *time_struct) { // Fo
     *time_struct = *localtime(&rawtime);
     strftime(time_UTC, 26, "%a %Y-%m-%d %H:%M:%S", time_struct);
     return 0;
+}
+
+int check_dst(long time_unix) {
+    char time_UTC[20];
+    struct tm time_struct;
+    format_time(time_unix, time_UTC, &time_struct);
+    int is_dst = time_struct.tm_isdst;
+    return is_dst;
 }
