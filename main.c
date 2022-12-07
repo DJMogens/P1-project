@@ -198,7 +198,7 @@ void output_to_files(measurement measurements[], int length, int start_times[]) 
                     correct_for_dst = is_dst_start - is_dst_now; // Will give 1 if DST switched on, -1 if DST switched off
                     is_dst_start = is_dst_now;
                 }
-                if(i) {
+                if(i) { // 
                     output[i].calc.time_unix += correct_for_dst * SEC_PER_HOUR;
                     correct_for_dst = 0;
                 }
@@ -229,7 +229,7 @@ void create_graph(int output_num) {
     };
     FILE* gnuplotPipe = popen("gnuplot -persistent", "w");
     for(int i = 0; i < num_commands; i++) {
-        fprintf(gnuplotPipe, "%s \n", commandsForGnuplot[i]);
+        fprintf(gnuplotPipe, "  %s \n", commandsForGnuplot[i]);
     }
     fprintf(gnuplotPipe, "set xlabel 'time (%s)' \n", output[output_num].graph.time_unit);
     fprintf(gnuplotPipe, "set title '%s' \n", output[output_num].graph.name);
