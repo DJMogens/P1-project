@@ -33,32 +33,31 @@ typedef struct {
         char time_fmt[10];
         char time_unit[10];
     } graph;
-} data;
+} output_data;
 
-data output[4] = {
-    {0, 0, SEC_PER_HOUR, "", "./output/hours/hours.txt", "hours", "\"\%H:\%M\"", "HH:MM"},
-    {0, 0, SEC_PER_DAY, "", "./output/days/days.txt", "days", "\"\%m-\%d\"", "mm-dd"},
-    {0, 0, SEC_PER_WEEK, "", "./output/weeks.txt", "weeks", "\"\%m-\%d\"", "mm-dd"},
-    {0, 0, SEC_PER_MONTH, "", "./output/month.txt", "month", "\"\%Y-\%m\"", "yyyy-mm"}
-};
-
-char month_names[12][3] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+const char month_names[12][3] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 int read_config(int* alarm_time);
 int get_length(FILE* fp);
 int get_data(FILE* fp, measurement measurements[], int length);
-void calc_sec_in_month(long int time_unix);
-void calc_start_of_time(measurement first, int results[3]);
+void calc_sec_in_month(long int time_unix, output_data *output_m);
+void calc_start_of_time(measurement first, output_data output[], int results[3]);
 int check_leap_year(int year);
-void output_to_files(measurement measurements[], int length, int start_times[]);
-void create_graph(int output_num);
-int water_per_x(measurement measurements[], int length, int output_num, long graph_start, int correct_for_dst);
+void output_to_files(measurement measurements[], int length, output_data output[], int start_times[]);
+void create_graph(output_data output[], int output_num);
+int water_per_x(measurement measurements[], int length, int output_num, long graph_start, int correct_for_dst, output_data output[]);
 int time_since_zero(measurement measurements[], int length, int alarm_time);
 void print_alarm(int time, int alarm_time);
 int format_time(long time_unix, char time_UTC[], struct tm *time_struct);
 int check_dst(long time_unix);
 
 int main(void) {
+    output_data output[4] = {
+        {0, 0, SEC_PER_HOUR, "", "", "hours", "\"\%H:\%M\"", "HH:MM"},
+        {0, 0, SEC_PER_DAY, "", "", "days", "\"\%m-\%d\"", "mm-dd"},
+        {0, 0, SEC_PER_WEEK, "", "./output/weeks.txt", "weeks", "\"\%m-\%d\"", "mm-dd"},
+        {0, 0, SEC_PER_MONTH, "", "./output/month.txt", "month", "\"\%Y-\%m\"", "yyyy-mm"}
+    };
     //Reading configuration
     int alarm_time;
     int start_times[4];
@@ -74,14 +73,15 @@ int main(void) {
     length = get_length(fp); // Finder linjeantal i fil
     measurement measurements[length]; // Laver en array til målinger 
     get_data(fp, measurements, length);
-    calc_start_of_time(measurements[0], start_times);
-    output_to_files(measurements, length, start_times);
+    calc_start_of_time(measurements[0], output, start_times);
+    output_to_files(measurements, length, output, start_times);
     time_since_zero(measurements, length, alarm_time);
     fclose(fp);
+    printf("Goodbye.");
     return 0;
 }
 
-void calc_start_of_time(measurement first, int results[4]) { // Beregner, hvor lang tid, der går, indtil ny hel time, dag og uge
+void calc_start_of_time(measurement first, output_data output[], int results[4]) { // Beregner, hvor lang tid, der går, indtil ny hel time, dag og uge
     printf("calc_start_of_time running ...\n");
     int m, h, d, w, mon;
     char time_UTC[26];
@@ -102,7 +102,7 @@ void calc_start_of_time(measurement first, int results[4]) { // Beregner, hvor l
     if(w < 0) {
         w += SEC_PER_WEEK;
     }
-    calc_sec_in_month(first.time_unix);
+    calc_sec_in_month(first.time_unix, &output[3]);
     mon = (output[3].calc.sec_per_unit - time_struct.tm_mday + 1) % output[3].calc.sec_per_unit * SEC_PER_DAY * output[3].calc.sec_per_unit - time_struct.tm_sec - time_struct.tm_min * SEC_PER_MIN - time_struct.tm_hour * SEC_PER_HOUR;
     if(mon < 0) {
         mon += output[3].calc.sec_per_unit;
@@ -164,14 +164,14 @@ int get_data(FILE* fp, measurement measurements[], int length) { //Indlæser dat
     } while (!feof(fp));
 }
 
-void output_to_files(measurement measurements[], int length, int start_times[]) { // Sender output til filer (hours.txt, days.txt etc.)
+void output_to_files(measurement measurements[], int length, output_data output[], int start_times[]) { // Sender output til filer (hours.txt, days.txt etc.)
     printf("output_to_files running ...\n");
     for(int i = 0; i < 4; i++) { // FOR HOURS, DAYS, WEEKS, MONTH
         output[i].calc.time_unix = measurements[0].time_unix + start_times[i];
         long graph_start;
         int fail;
         do {
-            calc_sec_in_month(output[i].calc.time_unix);
+            calc_sec_in_month(output[i].calc.time_unix, &output[3]);
             int is_dst_start = check_dst(output[i].calc.time_unix);
             int correct_for_dst = 0;
             if(i == 0) {
@@ -198,23 +198,23 @@ void output_to_files(measurement measurements[], int length, int start_times[]) 
                     correct_for_dst = is_dst_start - is_dst_now; // Will give 1 if DST switched on, -1 if DST switched off
                     is_dst_start = is_dst_now;
                 }
-                if(i) { // 
+                if(i) { 
                     output[i].calc.time_unix += correct_for_dst * SEC_PER_HOUR;
                     correct_for_dst = 0;
                 }
-                fail = water_per_x(measurements, length, i, graph_start, correct_for_dst);
+                fail = water_per_x(measurements, length, i, graph_start, correct_for_dst, output);
                 if(!fail) {
                     fprintf(outp, "%s; %d\n", output[i].txt.timestamp, output[i].calc.water_diff);
                     output[i].calc.time_unix += output[i].calc.sec_per_unit;
                 }
             } while (!fail);
-            create_graph(i);
+            create_graph(output, i);
             fclose(outp);
         } while(i < 2 && fail == 2);
-    }   
+    }
 }
 
-void create_graph(int output_num) {
+void create_graph(output_data output[], int output_num) {
     const int num_commands = 9;
     char* commandsForGnuplot[] = {
         "set datafile separator \";\"",
@@ -246,7 +246,7 @@ void create_graph(int output_num) {
     fprintf(gnuplotPipe, "plot '%s' using 1:2 with boxes linecolor rgb \"red\" \n", output[output_num].txt.file_path);
 }
 
-void calc_sec_in_month(long int time_unix) {
+void calc_sec_in_month(long int time_unix, output_data *output_m) {
     int days_in_each_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     struct tm time_struct;
     char irr_time[26];
@@ -255,7 +255,7 @@ void calc_sec_in_month(long int time_unix) {
     if(time_struct.tm_mon == 1 && check_leap_year(time_struct.tm_year + 1900)) {
         days_in_month = 29; // Kontrollerer for skudår
     }
-    output[3].calc.sec_per_unit = SEC_PER_DAY * days_in_month;
+    output_m->calc.sec_per_unit = SEC_PER_DAY * days_in_month;
 }
 
 int check_leap_year(int year) {
@@ -265,7 +265,7 @@ int check_leap_year(int year) {
     return 0;
 }
 
-int water_per_x(measurement measurements[], int length, int output_num, long graph_start, int correct_for_dst) { // Beregner forbrug sidste time, day, uge eller 4 uger
+int water_per_x(measurement measurements[], int length, int output_num, long graph_start, int correct_for_dst, output_data output[]) { // Beregner forbrug sidste time, day, uge eller 4 uger
     double ave;
     int i,
         end_water,
@@ -275,7 +275,7 @@ int water_per_x(measurement measurements[], int length, int output_num, long gra
     start_time = output[output_num].calc.time_unix;
     end_time = start_time + output[output_num].calc.sec_per_unit;
     if(output_num == 3) {
-        calc_sec_in_month(start_time);
+        calc_sec_in_month(start_time, &output[3]);
     }
     char looking_for = 's';
     for(i = 0; i < length; i++) {

@@ -14,7 +14,7 @@ int main(void) {
         i;
     srand(time(0));
     
-    for(new_time = 	1672527600; new_time < 	1704063599; new_time += 600) {
+    for(new_time = 	1665697169; new_time < 	1686692369; new_time += 600) {
         fprintf(fp, "%ld,", new_time);
         for(i = 10; i <= 10000000; i *= 10) {
             if(new_water < i) {
