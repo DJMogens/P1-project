@@ -217,19 +217,19 @@ void output_to_files(measurement measurements[], int length, output_data output[
 void create_graph(output_data output[], int output_num) {
     const int num_commands = 9;
     char* commandsForGnuplot[] = {
-        "set datafile separator \";\"",
-        "set ylabel 'water (litres)'",
-        "set xdata time",
-        "set xrange [*:*]",
-        "set yrange [0:*]",
-        "set timefmt '%a %Y-%m-%d %H:%M:%S'",
-        "set grid",
-        "set terminal png size 2000,1000 enhanced font \"Arial,20\"",
-        "set style fill solid 1.00 border 0"
+        "  set datafile separator \";\"",
+        "  set ylabel 'water (litres)'",
+        "  set xdata time",
+        "  set xrange [*:*]",
+        "  set yrange [0:*]",
+        "  set timefmt '%a %Y-%m-%d %H:%M:%S'",
+        "  set grid",
+        "  set terminal png size 2000,1000 enhanced font \"Arial,20\"",
+        "  set style fill solid 1.00 border 0"
     };
     FILE* gnuplotPipe = popen("gnuplot -persistent", "w");
     for(int i = 0; i < num_commands; i++) {
-        fprintf(gnuplotPipe, "  %s \n", commandsForGnuplot[i]);
+        fprintf(gnuplotPipe, "%s \n", commandsForGnuplot[i]);
     }
     fprintf(gnuplotPipe, "set xlabel 'time (%s)' \n", output[output_num].graph.time_unit);
     fprintf(gnuplotPipe, "set title '%s' \n", output[output_num].graph.name);
