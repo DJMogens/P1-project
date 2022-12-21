@@ -11,11 +11,11 @@ int main(void) {
     FILE* fp;
     fp = fopen("newdata.csv", "w");
     long new_time;
-    int new_water = 53041,
+    int new_water = START_WATER,
         num,
         i;
     srand(time(0));
-    for(new_time = 	START_TIME; new_time < 	END_TIME; new_time += INTERVAL) {
+    for(new_time =START_TIME; new_time <END_TIME; new_time += INTERVAL) {
         fprintf(fp, "%ld,", new_time);
         for(i = 10; i <= 10000000; i *= 10) {
             if(new_water < i) {
